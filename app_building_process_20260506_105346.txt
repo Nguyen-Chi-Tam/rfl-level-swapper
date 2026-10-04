@@ -1,0 +1,37 @@
+# Ionic Calculator App: Build & Run Commands
+
+# 1. Install Ionic CLI (if not already installed)
+npm install -g @ionic/cli
+
+# 2. Create a new Ionic app (run in your desired folder)
+ionic start myApp blank
+
+# 3. Change directory to your app
+cd myApp
+
+# 4. Install required dependencies
+npm install @angular/core @ionic/angular tslib
+
+# 5. Add Capacitor Android platform
+ionic capacitor add android
+
+# 6. Build the Ionic app
+ionic build
+
+# 7. Sync web assets to Android project
+npx cap sync android
+
+# 7.5. Add the SDK
+In the android folder, create a file: local.properties
+Add this to the created file:
+sdk.dir=C:\\Users\\fegel\\AppData\\Local\\Android\\Sdk
+
+# 8. Build the Android APK (from the android directory)
+cd android
+./gradlew assembleDebug
+
+# 9. Install the APK to a connected Android device (from the android directory)
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# (Optional) Open Android Studio for advanced debugging/building
+# npx cap open android

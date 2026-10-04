@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/item_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/widget_item_pill"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingEnd="4dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <!-- Custom Level Title (left side, truncate end) -->
+    <TextView
+        android:id="@+id/item_custom_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:text="Trouble on the Double"
+        android:textColor="#ffffff"
+        android:textSize="12sp" />
+
+    <!-- Arrow -->
+    <TextView
+        android:id="@+id/item_arrow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="4dp"
+        android:text="->"
+        android:textColor="#a0a0a0"
+        android:textSize="11sp" />
+
+    <!-- Target World Day/Night (right side, truncate end) -->
+    <TextView
+        android:id="@+id/item_target_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:text="Ancient Egypt - Day 1"
+        android:textColor="#ffffff"
+        android:textSize="12sp" />
+
+    <!-- Delete button (trash icon) -->
+    <ImageView
+        android:id="@+id/item_delete_btn"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_marginStart="2dp"
+        android:padding="4dp"
+        android:src="@drawable/ic_trash_bin"
+        android:contentDescription="Delete"
+        android:scaleType="fitCenter" />
+
+</LinearLayout>
