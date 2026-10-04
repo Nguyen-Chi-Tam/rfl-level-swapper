@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import JSZip from 'jszip';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { Upload, Download, Info, FileJson, Map as MapIcon, Hash, ChevronRight, X, FileArchive, ArrowRight, Trash2, History, Smartphone, Sparkles } from 'lucide-react';
+import { Upload, Download, Info, FileJson, Map as MapIcon, Hash, ChevronRight, X, FileArchive, ArrowRight, Trash2, History } from 'lucide-react';
 
 export interface LevelHistoryItem {
   id: string;
@@ -623,22 +623,6 @@ export default function PvZLevelSwapper() {
                 <Trash2 size={13} /> Clear History
               </button>
             )}
-          </div>
-
-          {/* Android Home Screen Widget Tip */}
-          <div className="bg-[#122214] border border-[#2d5231] rounded-2xl p-3.5 flex items-start sm:items-center gap-3">
-            <div className="p-2 bg-yellow-500/10 text-yellow-400 rounded-xl shrink-0 mt-0.5 sm:mt-0">
-              <Smartphone size={20} />
-            </div>
-            <div className="text-xs space-y-0.5 flex-1">
-              <p className="font-semibold text-yellow-300 flex items-center gap-1.5">
-                <Sparkles size={14} className="text-yellow-400" />
-                Home Screen Widget Available
-              </p>
-              <p className="text-amber-100/75 leading-relaxed">
-                Add the <strong>Level Swaps</strong> widget (4x2) to your home screen to see which custom level was replaced!
-              </p>
-            </div>
           </div>
 
           {/* History List Matching Widget Layout */}
