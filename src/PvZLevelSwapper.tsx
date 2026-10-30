@@ -1,9 +1,9 @@
 import type React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import JSZip from 'jszip';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { Upload, Download, Info, FileJson, Map as MapIcon, Hash, ChevronRight, X, FileArchive, ArrowRight, Trash2, History } from 'lucide-react';
+import { Upload, Download, Info, FileJson, Map as MapIcon, Hash, ChevronRight, X, FileArchive, ArrowRight, Trash2, History, GripVertical, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 
 export interface LevelHistoryItem {
   id: string;
@@ -48,7 +48,10 @@ interface LevelFile {
   content: Blob;
   id: string;
   levelTitle?: string;
+  addedAt: number;
 }
+
+type SortMode = 'added' | 'alphabetical' | 'custom';
 
 const extractLevelTitle = async (blob: Blob, fallbackName: string): Promise<string> => {
   try {
@@ -103,6 +106,10 @@ export default function PvZLevelSwapper() {
   const [isDragging, setIsDragging] = useState(false);
   const [previewFile, setPreviewFile] = useState<LevelFile | null>(null);
   const [previewContent, setPreviewContent] = useState<string>('');
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>('added');
+  const addedCounter = useRef(0);
 
   const [levelHistory, setLevelHistory] = useState<LevelHistoryItem[]>(() => {
     try {
@@ -217,19 +224,23 @@ export default function PvZLevelSwapper() {
               const content = await zipEntry.async('blob');
               const originalName = zipEntry.name.split('/').pop() ?? zipEntry.name;
               const title = await extractLevelTitle(content, originalName);
-              newFiles.push({ originalName, content, id: Math.random().toString(36).substr(2, 9), levelTitle: title });
+              newFiles.push({ originalName, content, id: Math.random().toString(36).substr(2, 9), levelTitle: title, addedAt: ++addedCounter.current });
             }
           }
         } else if (file.name.toLowerCase().endsWith('.json')) {
           const title = await extractLevelTitle(file, file.name);
-          newFiles.push({ originalName: file.name, content: file, id: Math.random().toString(36).substr(2, 9), levelTitle: title });
+          newFiles.push({ originalName: file.name, content: file, id: Math.random().toString(36).substr(2, 9), levelTitle: title, addedAt: ++addedCounter.current });
         }
       }
 
       setFiles(prev => {
         const existingNames = new Set(prev.map(f => f.originalName));
+        // Keep the order in which files were added (first added = first level)
         const uniqueNew = newFiles.filter(f => !existingNames.has(f.originalName));
-        return [...prev, ...uniqueNew];
+        const merged = [...prev, ...uniqueNew];
+        return sortMode === 'alphabetical'
+          ? merged.sort((a, b) => a.originalName.localeCompare(b.originalName))
+          : merged;
       });
     } catch (error) {
       console.error("Error processing files:", error);
@@ -266,7 +277,44 @@ export default function PvZLevelSwapper() {
 
   const clearFiles = () => setFiles([]);
 
-  const sortedFiles = [...files].sort((a, b) => a.originalName.localeCompare(b.originalName));
+  // Reorder helpers: the list order decides which file becomes which level number
+  const moveFile = (id: string, direction: -1 | 1) => {
+    setSortMode('custom');
+    setFiles(prev => {
+      const index = prev.findIndex(f => f.id === id);
+      const target = index + direction;
+      if (index === -1 || target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const reorderFile = (fromId: string, toId: string) => {
+    setSortMode('custom');
+    setFiles(prev => {
+      const from = prev.findIndex(f => f.id === fromId);
+      const to = prev.findIndex(f => f.id === toId);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
+
+  const sortAlphabetically = () => {
+    setSortMode('alphabetical');
+    setFiles(prev => [...prev].sort((a, b) => a.originalName.localeCompare(b.originalName)));
+  };
+
+  // "Added" order: first file you dropped in becomes the first level
+  const sortByAddedOrder = () => {
+    setSortMode('added');
+    setFiles(prev => [...prev].sort((a, b) => a.addedAt - b.addedAt));
+  };
+
+  const orderedFiles = files;
   const startLevelNumber = Math.max(1, parseInt(String(levelNumber), 10) || 1);
 
   const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -282,21 +330,21 @@ export default function PvZLevelSwapper() {
   };
 
   const handleDownload = async () => {
-    if (sortedFiles.length === 0) return;
+    if (orderedFiles.length === 0) return;
     setIsLoading(true);
 
     try {
       let blob: Blob;
       let downloadName: string;
 
-      if (sortedFiles.length === 1) {
-        const file = sortedFiles[0];
+      if (orderedFiles.length === 1) {
+        const file = orderedFiles[0];
         const newFileName = `${selectedWorld}${startLevelNumber}.json`;
         blob = file.content instanceof Blob ? file.content : new Blob([file.content]);
         downloadName = newFileName;
       } else {
         const zip = new JSZip();
-        sortedFiles.forEach((file, index) => {
+        orderedFiles.forEach((file, index) => {
           const newFileName = `${selectedWorld}${startLevelNumber + index}.json`;
           zip.file(newFileName, file.content);
         });
@@ -312,10 +360,10 @@ export default function PvZLevelSwapper() {
           directory: Directory.ExternalStorage,
         });
 
-        if (sortedFiles.length === 1 && sortedFiles[0].originalName.toLowerCase() !== downloadName.toLowerCase()) {
+        if (orderedFiles.length === 1 && orderedFiles[0].originalName.toLowerCase() !== downloadName.toLowerCase()) {
           try {
             await Filesystem.deleteFile({
-              path: `Download/${sortedFiles[0].originalName}`,
+              path: `Download/${orderedFiles[0].originalName}`,
               directory: Directory.ExternalStorage,
             });
           } catch {
@@ -339,7 +387,7 @@ export default function PvZLevelSwapper() {
       // Record swapped levels into 30-level history & Android widget
       const currentWorldObj = worlds.find(w => w.id === selectedWorld);
       const worldName = currentWorldObj ? currentWorldObj.name : selectedWorld;
-      const swapEntries = sortedFiles.map((file, index) => {
+      const swapEntries = orderedFiles.map((file, index) => {
         const lvlNum = startLevelNumber + index;
         return {
           originalName: file.originalName,
@@ -478,14 +526,38 @@ export default function PvZLevelSwapper() {
             </div>
 
             {/* Preview List */}
-            {sortedFiles.length > 0 && (
+            {orderedFiles.length > 0 && (
               <div className="bg-[#142415] rounded-xl border border-[#2d4a22] overflow-hidden flex flex-col max-h-[300px]">
-                <div className="bg-[#1a2e1c] px-4 py-2 border-b border-[#2d4a22] flex justify-between items-center sticky top-0">
+                <div className="bg-[#1a2e1c] px-4 py-2 border-b border-[#2d4a22] flex justify-between items-center sticky top-0 gap-2 z-10">
                   <span className="text-xs font-bold text-green-400 uppercase tracking-wider">File Preview</span>
-                  <span className="text-xs font-medium text-amber-200/50">Sorted alphabetically</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-amber-200/50 hidden md:inline mr-1">
+                      Drag to reorder
+                    </span>
+                    <button
+                      onClick={sortByAddedOrder}
+                      className={`text-[11px] font-semibold flex items-center gap-1 px-2 py-1 rounded-md border transition-colors cursor-pointer
+                        ${sortMode === 'added'
+                          ? 'bg-green-500/20 text-green-300 border-green-500/50'
+                          : 'bg-[#142415] text-amber-200/70 border-[#2d4a22] hover:text-green-300 hover:bg-[#1e3421]'}`}
+                      title="Sort by when you added each file (first added = first level)"
+                    >
+                      <History size={12} /> Added
+                    </button>
+                    <button
+                      onClick={sortAlphabetically}
+                      className={`text-[11px] font-semibold flex items-center gap-1 px-2 py-1 rounded-md border transition-colors cursor-pointer
+                        ${sortMode === 'alphabetical'
+                          ? 'bg-green-500/20 text-green-300 border-green-500/50'
+                          : 'bg-[#142415] text-amber-200/70 border-[#2d4a22] hover:text-green-300 hover:bg-[#1e3421]'}`}
+                      title="Sort files alphabetically by name"
+                    >
+                      <ArrowUpDown size={12} /> A–Z
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-y-auto p-2 space-y-1">
-                  {sortedFiles.map((file, fileIndex) => {
+                  {orderedFiles.map((file, fileIndex) => {
                     const currentWorldObj = worlds.find(w => w.id === selectedWorld);
                     const worldName = currentWorldObj ? currentWorldObj.name : selectedWorld;
                     const lvlNum = startLevelNumber + fileIndex;
@@ -503,7 +575,62 @@ export default function PvZLevelSwapper() {
                     };
 
                     return (
-                      <div key={file.id} className="flex items-center gap-3 bg-[#1e3421] p-3 rounded-lg border border-[#2d4a22]/50 hover:bg-[#253e28] transition-colors group">
+                      <div
+                        key={file.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDragId(file.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', file.id);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (dragOverId !== file.id) setDragOverId(file.id);
+                        }}
+                        onDragLeave={() => setDragOverId(prev => (prev === file.id ? null : prev))}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const fromId = e.dataTransfer.getData('text/plain') || dragId;
+                          if (fromId) reorderFile(fromId, file.id);
+                          setDragId(null);
+                          setDragOverId(null);
+                        }}
+                        onDragEnd={() => {
+                          setDragId(null);
+                          setDragOverId(null);
+                        }}
+                        className={`flex items-center gap-2 bg-[#1e3421] p-3 rounded-lg border transition-colors group
+                          ${dragOverId === file.id && dragId !== file.id
+                            ? 'border-green-400 bg-[#253e28] ring-1 ring-green-500/50'
+                            : 'border-[#2d4a22]/50 hover:bg-[#253e28]'}
+                          ${dragId === file.id ? 'opacity-40' : ''}`}
+                      >
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <GripVertical
+                            size={16}
+                            className="text-[#5b8a45] group-hover:text-green-400 cursor-grab active:cursor-grabbing touch-none"
+                            aria-label="Drag to reorder"
+                          />
+                          <div className="flex flex-col">
+                            <button
+                              onClick={() => moveFile(file.id, -1)}
+                              disabled={fileIndex === 0}
+                              className="text-amber-200/50 hover:text-green-300 disabled:text-[#3d5c31] disabled:cursor-not-allowed transition-colors p-0.5 cursor-pointer"
+                              title="Move up"
+                            >
+                              <ArrowUp size={13} />
+                            </button>
+                            <button
+                              onClick={() => moveFile(file.id, 1)}
+                              disabled={fileIndex === orderedFiles.length - 1}
+                              className="text-amber-200/50 hover:text-green-300 disabled:text-[#3d5c31] disabled:cursor-not-allowed transition-colors p-0.5 cursor-pointer"
+                              title="Move down"
+                            >
+                              <ArrowDown size={13} />
+                            </button>
+                          </div>
+                        </div>
                         <FileJson size={16} className="text-amber-500/70 shrink-0 cursor-pointer hover:text-green-400" onClick={openPreview} />
                         <div className="flex-1 min-w-0 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 sm:gap-4 text-sm cursor-pointer" onClick={openPreview}>
                           <span className="text-amber-100 truncate" title={file.levelTitle || file.originalName}>
@@ -534,7 +661,7 @@ export default function PvZLevelSwapper() {
 
             {/* Preview Modal */}
             {previewFile && (() => {
-              const fileIndex = sortedFiles.findIndex(f => f.id === previewFile.id);
+              const fileIndex = orderedFiles.findIndex(f => f.id === previewFile.id);
               const currentWorldObj = worlds.find(w => w.id === selectedWorld);
               const worldName = currentWorldObj ? currentWorldObj.name : selectedWorld;
               const lvlNum = startLevelNumber + fileIndex;
